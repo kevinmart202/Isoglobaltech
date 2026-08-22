@@ -1,0 +1,4 @@
+# Dependencias para el Proyecto de POO (Semanas 1 y 2 - UEES)
+# Python 3.10+
+
+reportlab>=4.0.0

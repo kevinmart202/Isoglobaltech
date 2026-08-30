@@ -1,4 +1,6 @@
-# Dependencias para el Proyecto de POO (Semanas 1 y 2 - UEES)
+# Dependencias del Sistema Comercial y de Facturación — Isoglobaltech
 # Python 3.10+
 
+streamlit>=1.30.0
+pandas>=2.0.0
 reportlab>=4.0.0

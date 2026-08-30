@@ -1,16 +1,22 @@
 """
 Módulo main.py
 Sistema Interactivo Comercial y de Emisión de Proformas / Facturas
-Programación Estructurada - Semanas 1 y 2
+Programación Estructurada - Semana 3: Polimorfismo, Interfaces y Clases Abstractas
 Universidad Espíritu Santo (UEES)
 """
 
 import os
 import sys
+import time
+import socket
+import webbrowser
+import subprocess
 from datetime import datetime
 from typing import List, Optional
 
 from src.cliente import Cliente
+from src.cliente_mayorista import ClienteMayorista
+from src.cliente_minorista import ClienteMinorista
 from src.producto import Producto
 from src.producto_fisico import ProductoFisico
 from src.producto_digital import ProductoDigital
@@ -38,22 +44,37 @@ def leer_texto_no_vacio(mensaje: str) -> str:
 
 
 def leer_float_positivo(mensaje: str, default: Optional[float] = None) -> float:
-    """Solicita un número decimal mayor a cero."""
+    """Solicita un número decimal mayor o igual a cero o retorna valor por defecto."""
     while True:
         entrada = input(mensaje).strip()
         if not entrada and default is not None:
             return default
         try:
             num = float(entrada)
-            if num > 0:
+            if num >= 0:
                 return num
-            print("  ⚠️ Ingrese un valor mayor a cero (0).")
+            print("  ⚠️ Ingrese un valor mayor o igual a cero (0).")
         except ValueError:
             print("  ⚠️ Ingrese un número válido (ejemplo: 25.50).")
 
 
+def leer_entero_no_negativo(mensaje: str, default: Optional[int] = None) -> int:
+    """Solicita un número entero mayor o igual a cero."""
+    while True:
+        entrada = input(mensaje).strip()
+        if not entrada and default is not None:
+            return default
+        try:
+            num = int(entrada)
+            if num >= 0:
+                return num
+            print("  ⚠️ La cantidad debe ser un número entero mayor o igual a cero.")
+        except ValueError:
+            print("  ⚠️ Ingrese un número entero válido (ejemplo: 2).")
+
+
 def leer_entero_positivo(mensaje: str) -> int:
-    """Solicita un número entero positivo."""
+    """Solicita un número entero estrictamente mayor a cero."""
     while True:
         entrada = input(mensaje).strip()
         try:
@@ -65,24 +86,106 @@ def leer_entero_positivo(mensaje: str) -> int:
             print("  ⚠️ Ingrese un número entero válido (ejemplo: 2).")
 
 
+def abrir_interfaz_grafica() -> None:
+    """Lanza el servidor Streamlit en segundo plano (si no está activo) y abre el navegador web."""
+    mostrar_encabezado()
+    print("\n 🌐 INICIANDO INTERFAZ GRÁFICA WEB (STREAMLIT)...")
+    url = "http://localhost:8501"
+
+    # Verificar si el puerto 8501 ya está respondiendo
+    puerto_abierto = False
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1.0)
+        resultado = sock.connect_ex(("localhost", 8501))
+        if resultado == 0:
+            puerto_abierto = True
+        sock.close()
+    except Exception:
+        puerto_abierto = False
+
+    if not puerto_abierto:
+        print(" ⏳ Iniciando servidor web Streamlit en segundo plano...")
+        directorio_actual = os.path.dirname(os.path.abspath(__file__))
+        ruta_app = os.path.join(directorio_actual, "app.py")
+
+        # Lanzar proceso en segundo plano de forma no bloqueante
+        subprocess.Popen(
+            [sys.executable, "-m", "streamlit", "run", ruta_app, "--server.headless=true", "--server.port=8501"],
+            cwd=directorio_actual,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(2.5)
+
+    print(f" 🚀 Redirigiendo al navegador web: {url}")
+    webbrowser.open(url)
+    print(" ✅ ¡Página web abierta exitosamente en su navegador!")
+    pausar()
+
+
 def solicitar_datos_cliente() -> Cliente:
-    """Solicita interactivamente los datos del cliente con validación mediante setters de POO."""
+    """
+    Solicita interactivamente los datos del cliente instanciando una subclase
+    concreta (ClienteMayorista o ClienteMinorista) mediante polimorfismo.
+    """
     print("\n" + "-" * 80)
     print(" 👤 PASO 1: REGISTRO DE DATOS DEL CLIENTE")
     print("-" * 80)
-    
+    print(" Tipo de Cliente:")
+    print("   [1] Cliente Mayorista (Empresas / Distribuidores - Descuento base + bono volumen)")
+    print("   [2] Cliente Minorista (Consumidor Final - Descuento por fidelidad + puntos)")
+
+    tipo_opc = ""
+    while tipo_opc not in ["1", "2"]:
+        tipo_opc = input("\n Seleccione el tipo de cliente (1/2): ").strip()
+        if tipo_opc not in ["1", "2"]:
+            print("  ⚠️ Opción no válida. Ingrese 1 para Mayorista o 2 para Minorista.")
+
     while True:
         try:
-            cedula = leer_texto_no_vacio(" Ingrese Cédula o RUC (mínimo 5 dígitos): ")
+            cedula = leer_texto_no_vacio(" Ingrese Cédula o RUC (mínimo 5 caracteres): ")
             nombre = leer_texto_no_vacio(" Ingrese Nombre y Apellido completo: ")
-            email = leer_texto_no_vacio(" Ingrese Correo Electrónico (ej. usuario@dominio.com): ")
+            email = leer_texto_no_vacio(" Ingrese Correo Electrónico (ej. usuario@empresa.com): ")
             telefono = leer_texto_no_vacio(" Ingrese Teléfono o Celular: ")
 
-            # La creación invoca los setters y aplica encapsulación estricta
-            cliente = Cliente(cedula=cedula, nombre=nombre, email=email, telefono=telefono)
-            print(f"\n ✅ Cliente '{cliente.nombre}' registrado correctamente.")
+            if tipo_opc == "1":
+                # Cliente Mayorista
+                razon_social = input(" Razón Social / Nombre Comercial [Enter para usar el nombre]: ").strip()
+                pct_desc = leer_float_positivo(" Porcentaje de descuento base (ej. 0.15 para 15%) [Enter para 0.15]: ", default=0.15)
+                monto_vol = leer_float_positivo(" Monto mínimo para bono por volumen ($) [Enter para $500.00]: ", default=500.0)
+                pct_vol = leer_float_positivo(" Porcentaje adicional por volumen (ej. 0.05 para 5%) [Enter para 0.05]: ", default=0.05)
+
+                cliente = ClienteMayorista(
+                    cedula=cedula,
+                    nombre=nombre,
+                    email=email,
+                    telefono=telefono,
+                    razon_social=razon_social if razon_social else nombre,
+                    porcentaje_descuento=pct_desc,
+                    monto_minimo_volumen=monto_vol,
+                    porcentaje_adicional_volumen=pct_vol,
+                )
+            else:
+                # Cliente Minorista
+                puntos = leer_entero_no_negativo(" Puntos de fidelidad acumulados [Enter para 0]: ", default=0)
+                pct_desc = leer_float_positivo(" Porcentaje de descuento por membresía (ej. 0.05 para 5%) [Enter para 0.05]: ", default=0.05)
+                val_punto = leer_float_positivo(" Valor en $ por cada punto [Enter para $0.05]: ", default=0.05)
+
+                cliente = ClienteMinorista(
+                    cedula=cedula,
+                    nombre=nombre,
+                    email=email,
+                    telefono=telefono,
+                    puntos_fidelidad=puntos,
+                    porcentaje_descuento=pct_desc,
+                    valor_por_punto=val_punto,
+                )
+
+            print(f"\n ✅ Cliente registrado exitosamente:")
+            print(f"    {cliente.obtener_resumen()}")
             return cliente
-        except ValueError as val_err:
+        except (ValueError, TypeError) as val_err:
             print(f"\n ❌ Error de validación: {val_err}")
             print(" Por favor ingrese los datos nuevamente con el formato correcto.\n")
 
@@ -119,7 +222,7 @@ def registrar_nuevo_producto_interactivo(catalogo: List[Producto]) -> Optional[P
             if opcion_tipo == "1":
                 peso = leer_float_positivo(" Peso del producto en Kilogramos (kg): ")
                 tarifa_envio = leer_float_positivo(" Tarifa de envío por Kg ($) [Enter para $2.50]: ", default=2.50)
-                
+
                 nuevo_prod = ProductoFisico(
                     codigo=codigo,
                     nombre=nombre,
@@ -169,12 +272,12 @@ def mostrar_catalogo_tabla(catalogo: List[Producto]) -> None:
 
 
 def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
-    """Flujo guiado paso a paso para crear clientes, seleccionar productos y emitir la factura final."""
+    """Flujo guiado paso a paso para registrar clientes, seleccionar productos y emitir factura con cálculo polimórfico."""
     mostrar_encabezado()
-    print("\n 🚀 ASISTENTE INTERACTIVO DE EMISIÓN DE FACTURA / PROFORMA")
+    print("\n 🚀 ASISTENTE DE EMISIÓN DE FACTURA / PROFORMA COMERCIAL")
     print(" Este asistente le guiará para registrar el cliente, seleccionar productos y emitir el documento final.\n")
 
-    # 1. Registrar Cliente
+    # 1. Registrar Cliente (Polimórfico)
     cliente = solicitar_datos_cliente()
 
     # 2. Inicializar Proforma
@@ -191,9 +294,9 @@ def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
         print("\n" + "-" * 80)
         print(" 🛒 PASO 2: AGREGAR PRODUCTOS A LA FACTURA")
         print("-" * 80)
-        
+
         mostrar_catalogo_tabla(catalogo)
-        
+
         print("\n Opciones:")
         print("   [1] Seleccionar un producto del catálogo por su CÓDIGO o NÚMERO")
         print("   [2] Registrar un NUEVO producto y agregarlo")
@@ -203,7 +306,6 @@ def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
         opc = input("\n Seleccione opción (1/2/3/0): ").strip()
 
         if opc == "0":
-            # Si cancela, devolvemos el stock de los productos ya agregados
             for item in proforma.items:
                 item.producto.aumentar_stock(item.cantidad)
             print("\n ⚠️ Emisión de factura cancelada. El inventario ha sido restablecido.")
@@ -217,14 +319,14 @@ def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
                 try:
                     proforma.agregar_item(nuevo, cant)
                     print(f" ✅ Agregado: {cant} unidad(es) de '{nuevo.nombre}'.")
-                    print(f" 💵 Subtotal parcial de la factura: ${proforma.calcular_subtotal_neto():.2f}")
+                    print(f" 💵 Subtotal bruto acumulado: ${proforma.calcular_subtotal_neto():.2f}")
+                    print(f" 🏷️ Descuento polimórfico estimado: ${proforma.calcular_descuento():.2f}")
                 except Exception as e:
                     print(f" ❌ No se pudo agregar: {e}")
 
         elif opc == "1":
             seleccion = input("\n Ingrese el CÓDIGO o NÚMERO [#] del producto: ").strip().upper()
-            
-            # Buscar por número de índice o código
+
             producto_elegido = None
             if seleccion.isdigit() and 1 <= int(seleccion) <= len(catalogo):
                 producto_elegido = catalogo[int(seleccion) - 1]
@@ -237,16 +339,18 @@ def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
 
             print(f"\n 👉 Seleccionado: {producto_elegido.nombre}")
             print(f"    Stock disponible: {producto_elegido.stock} uds. | Precio Final Unitario: ${producto_elegido.calcular_precio_final():.2f}")
-            
+
             if producto_elegido.stock <= 0:
                 print(" ❌ No hay stock disponible de este producto.")
                 continue
 
-            cant = leer_entero_positivo(f" Ingrese la cantidad a comprar: ")
+            cant = leer_entero_positivo(" Ingrese la cantidad a comprar: ")
             try:
                 proforma.agregar_item(producto_elegido, cant)
                 print(f"\n ✅ ¡{cant} unidad(es) de '{producto_elegido.nombre}' agregada(s) con éxito!")
-                print(f" 💵 Subtotal neto acumulado: ${proforma.calcular_subtotal_neto():.2f} | Total con IVA 15%: ${proforma.calcular_total():.2f}")
+                print(f" 💵 Subtotal bruto: ${proforma.calcular_subtotal_neto():.2f}")
+                print(f" 🏷️ Descuento ({proforma.cliente.tipo_cliente()}): -${proforma.calcular_descuento():.2f}")
+                print(f" 💳 Total a pagar (con IVA 15%): ${proforma.calcular_total():.2f}")
             except Exception as err:
                 print(f"\n ❌ Error al agregar producto: {err}")
 
@@ -263,6 +367,13 @@ def emitir_factura_paso_a_paso(catalogo: List[Producto]) -> None:
     print("\n 🎉 ¡FACTURA / PROFORMA EMITIDA EXITOSAMENTE!\n")
     texto_factura = proforma.generar_proforma_texto()
     print(texto_factura)
+
+    if isinstance(cliente, ClienteMinorista):
+        puntos_ganados = cliente.acumular_puntos(proforma.calcular_total())
+        if puntos_ganados > 0:
+            print(f"\n 🎁 ¡Felicidades! Por esta compra el cliente acumula {puntos_ganados} nuevos puntos Club Isoglobaltech.")
+            print(f"    Saldo total de puntos: {cliente.puntos_fidelidad}")
+
     pausar()
 
 
@@ -315,10 +426,11 @@ def menu_principal():
         print("  [1] 📝 CREAR Y EMITIR FACTURA / PROFORMA (Paso a Paso)")
         print("  [2] 📦 Ver catálogo de productos")
         print("  [3] ➕ Registrar nuevo producto en el catálogo (Físico o Digital)")
+        print("  [4] 🌐 Abrir Interfaz Gráfica Web (Streamlit)")
         print("  [0] 🚪 Salir del Sistema")
         print("=" * 80)
 
-        opcion = input(" Seleccione una opción (0-3): ").strip()
+        opcion = input(" Seleccione una opción (0-4): ").strip()
 
         if opcion == "1":
             emitir_factura_paso_a_paso(catalogo)
@@ -330,6 +442,8 @@ def menu_principal():
             mostrar_encabezado()
             registrar_nuevo_producto_interactivo(catalogo)
             pausar()
+        elif opcion == "4":
+            abrir_interfaz_grafica()
         elif opcion == "0":
             print("\n ¡Gracias por utilizar el Sistema Comercial ISOGLOBALTECH! Hasta luego.\n")
             break
@@ -340,5 +454,3 @@ def menu_principal():
 
 if __name__ == "__main__":
     menu_principal()
-
-

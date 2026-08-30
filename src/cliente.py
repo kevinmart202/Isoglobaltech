@@ -1,15 +1,19 @@
 """
 Módulo cliente.py
-Define la clase Cliente implementando encapsulación estricta con atributos privados y métodos getters/setters.
+Define la clase abstracta Cliente (Semana 3: Clases Abstractas e Interfaces).
+Aplica encapsulación estricta con atributos privados y métodos getters/setters,
+además de definir el contrato abstracto para el cálculo polimórfico de descuentos.
 """
 
+from abc import ABC, abstractmethod
 import re
 
 
-class Cliente:
+class Cliente(ABC):
     """
-    Representa un cliente dentro del sistema comercial.
-    Aplica encapsulamiento mediante atributos privados (__cedula, __nombre, __email, __telefono).
+    Clase base abstracta que representa un cliente genérico dentro del sistema comercial.
+    Establece la estructura común (cédula, nombre, email, teléfono) y define el método
+    abstracto calcular_descuento() que todas las subclases deben implementar obligatoriamente.
     """
 
     def __init__(self, cedula: str, nombre: str, email: str, telefono: str):
@@ -18,7 +22,7 @@ class Cliente:
         self.email = email
         self.telefono = telefono
 
-    # --- Getter y Setter de Cédula ---
+    # --- Getter y Setter de Cédula / Identificación ---
     @property
     def cedula(self) -> str:
         return self.__cedula
@@ -26,10 +30,10 @@ class Cliente:
     @cedula.setter
     def cedula(self, valor: str) -> None:
         if not isinstance(valor, str) or not valor.strip():
-            raise ValueError("La cédula no puede estar vacía y debe ser una cadena de texto.")
+            raise ValueError("La identificación (Cédula/RUC) no puede estar vacía.")
         valor_limpio = valor.strip()
         if len(valor_limpio) < 5:
-            raise ValueError("La cédula o identificación debe contener al menos 5 caracteres.")
+            raise ValueError("La identificación debe contener al menos 5 caracteres.")
         self.__cedula = valor_limpio
 
     # --- Getter y Setter de Nombre ---
@@ -68,12 +72,38 @@ class Cliente:
             raise ValueError("El teléfono no puede estar vacío.")
         self.__telefono = valor.strip()
 
+    # --- Métodos Abstractos (Contrato de Polimorfismo) ---
+    @abstractmethod
+    def calcular_descuento(self, subtotal: float) -> float:
+        """
+        Calcula el monto del descuento aplicable según el subtotal de la compra y
+        el tipo concreto de cliente.
+        
+        :param subtotal: Monto subtotal de los productos antes de descuento.
+        :return: Monto a descontar en dólares ($).
+        """
+        pass
+
+    @abstractmethod
+    def tipo_cliente(self) -> str:
+        """
+        Retorna la denominación del tipo de cliente (ej. 'Mayorista', 'Minorista').
+        """
+        pass
+
+    # --- Métodos de Representación ---
     def obtener_resumen(self) -> str:
         """Retorna una cadena con la información resumida del cliente."""
-        return f"Cliente: {self.__nombre} | CI/RUC: {self.__cedula} | Email: {self.__email} | Tel: {self.__telefono}"
+        return (
+            f"[{self.tipo_cliente()}] {self.__nombre} | "
+            f"CI/RUC: {self.__cedula} | Email: {self.__email} | Tel: {self.__telefono}"
+        )
 
     def __str__(self) -> str:
         return self.obtener_resumen()
 
     def __repr__(self) -> str:
-        return f"Cliente(cedula='{self.__cedula}', nombre='{self.__nombre}', email='{self.__email}', telefono='{self.__telefono}')"
+        return (
+            f"{self.__class__.__name__}(cedula='{self.__cedula}', "
+            f"nombre='{self.__nombre}', email='{self.__email}', telefono='{self.__telefono}')"
+        )

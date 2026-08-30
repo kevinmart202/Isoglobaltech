@@ -1,6 +1,6 @@
 """
 Módulo proforma.py
-Define la clase Proforma (Semana 2: Composición con ItemProforma y Asociación con Cliente).
+Define la clase Proforma (Semanas 2 y 3: Composición con ItemProforma, Asociación y Polimorfismo con Cliente).
 """
 
 from datetime import datetime
@@ -12,8 +12,11 @@ from .item_proforma import ItemProforma
 
 class Proforma:
     """
-    Representa una proforma comercial / cotización.
-    Demuestra el principio de Composición: contiene una colección de objetos ItemProforma.
+    Representa una proforma comercial / cotización / factura.
+    Demuestra los principios de:
+      - Composición: Administra internamente una colección de objetos ItemProforma.
+      - Asociación y Polimorfismo: Trabaja con la abstracción Cliente para calcular descuentos
+        de forma completamente polimórfica, sin necesidad de condicionales sobre el tipo real.
     """
 
     def __init__(
@@ -49,7 +52,7 @@ class Proforma:
     @cliente.setter
     def cliente(self, valor: Cliente) -> None:
         if not isinstance(valor, Cliente):
-            raise TypeError("El cliente debe ser una instancia de la clase Cliente.")
+            raise TypeError("El cliente debe ser una instancia de una subclase de Cliente (ClienteMayorista o ClienteMinorista).")
         self.__cliente = valor
 
     # --- Getter de Fecha ---
@@ -116,34 +119,48 @@ class Proforma:
         """Retorna la cantidad total de líneas de producto en la proforma."""
         return len(self.__items)
 
-    # --- Métodos de Cálculo Financiero ---
+    # --- Métodos de Cálculo Financiero Polimórfico ---
     def calcular_subtotal_neto(self) -> float:
-        """Calcula la suma de los subtotales de todos los ítems."""
+        """Calcula la suma bruta de los subtotales de todos los ítems."""
         return round(sum(item.calcular_subtotal() for item in self.__items), 2)
 
+    def calcular_descuento(self) -> float:
+        """
+        Aplica Polimorfismo: delega el cálculo del descuento al objeto Cliente asociado,
+        invocando calcular_descuento() sin realizar comprobaciones de tipo (evitando if/else o isinstance).
+        """
+        subtotal_bruto = self.calcular_subtotal_neto()
+        return self.__cliente.calcular_descuento(subtotal_bruto)
+
+    def calcular_subtotal_con_descuento(self) -> float:
+        """Calcula el subtotal gravable restando el descuento polimórfico."""
+        return round(max(0.0, self.calcular_subtotal_neto() - self.calcular_descuento()), 2)
+
     def calcular_iva(self) -> float:
-        """Calcula el valor del IVA sobre el subtotal neto."""
-        return round(self.calcular_subtotal_neto() * self.__porcentaje_iva, 2)
+        """Calcula el valor del IVA sobre la base imponible tras aplicar el descuento."""
+        return round(self.calcular_subtotal_con_descuento() * self.__porcentaje_iva, 2)
 
     def calcular_total(self) -> float:
-        """Calcula el monto total a pagar (Subtotal + IVA)."""
-        return round(self.calcular_subtotal_neto() + self.calcular_iva(), 2)
+        """Calcula el monto total a pagar (Subtotal con Descuento + IVA)."""
+        return round(self.calcular_subtotal_con_descuento() + self.calcular_iva(), 2)
 
     # --- Representación y Salida Formateada ---
     def generar_proforma_texto(self) -> str:
-        """Genera una representación tabular completa de la proforma."""
+        """Genera una representación tabular completa y detallada de la proforma."""
         separador = "=" * 80
         linea = "-" * 80
         fecha_str = self.__fecha.strftime("%d/%m/%Y %H:%M:%S")
+        tipo_cliente_str = self.__cliente.tipo_cliente()
 
         encabezado = [
             separador,
             "                          ISOGLOBALTECH - SISTEMA DE FACTURACIÓN",
             "                                 PROFORMA COMERCIAL",
             separador,
-            f" N° Proforma: {self.__numero_proforma:<25} Fecha de Emisión: {fecha_str}",
-            f" Cliente:     {self.__cliente.nombre:<25} Cédula/RUC:       {self.__cliente.cedula}",
-            f" Email:       {self.__cliente.email:<25} Teléfono:         {self.__cliente.telefono}",
+            f" N° Proforma:   {self.__numero_proforma:<25} Fecha de Emisión: {fecha_str}",
+            f" Cliente:       {self.__cliente.nombre:<25} Cédula/RUC:       {self.__cliente.cedula}",
+            f" Tipo Cliente:  {tipo_cliente_str:<25} Teléfono:         {self.__cliente.telefono}",
+            f" Email:         {self.__cliente.email}",
             linea,
             f" {'CÓDIGO':<10} | {'DESCRIPCIÓN':<22} | {'TIPO':<8} | {'CANT':<4} | {'P. UNIT':>8} | {'SUBTOTAL':>8}",
             linea,
@@ -156,11 +173,19 @@ class Proforma:
             for item in self.__items:
                 detalles.append(f" {item.obtener_linea_detalle()}")
 
+        subtotal_bruto = self.calcular_subtotal_neto()
+        descuento = self.calcular_descuento()
+        subtotal_neto = self.calcular_subtotal_con_descuento()
+        iva = self.calcular_iva()
+        total = self.calcular_total()
+
         pie = [
             linea,
-            f" {'SUBTOTAL NETO:':>65} ${self.calcular_subtotal_neto():>10.2f}",
-            f" {'IVA (' + str(int(self.__porcentaje_iva * 100)) + '%):':>65} ${self.calcular_iva():>10.2f}",
-            f" {'TOTAL A PAGAR:':>65} ${self.calcular_total():>10.2f}",
+            f" {'SUBTOTAL BRUTO:':>65} ${subtotal_bruto:>10.2f}",
+            f" {f'DESCUENTO ({tipo_cliente_str.upper()}):':>65} -${descuento:>9.2f}",
+            f" {'SUBTOTAL NETO IMPONIBLE:':>65} ${subtotal_neto:>10.2f}",
+            f" {'IVA (' + str(int(self.__porcentaje_iva * 100)) + '%):':>65} ${iva:>10.2f}",
+            f" {'TOTAL A PAGAR:':>65} ${total:>10.2f}",
             separador,
         ]
 
@@ -172,5 +197,5 @@ class Proforma:
     def __repr__(self) -> str:
         return (
             f"Proforma(numero='{self.__numero_proforma}', cliente='{self.__cliente.nombre}', "
-            f"items={len(self.__items)}, total={self.calcular_total()})"
+            f"tipo_cliente='{self.__cliente.tipo_cliente()}', items={len(self.__items)}, total={self.calcular_total()})"
         )

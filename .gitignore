@@ -3,9 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Diagram files to ignore from git
+# Diagram and document files to ignore from git
 *.drawio
 *.drawio.bkp
+*.pdf
+*.png
 
 # Virtual environments
 .env
